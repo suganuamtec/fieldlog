@@ -51,17 +51,6 @@ fi
 PY_VER=$("$PYTHON" --version 2>&1)
 ok "Found $PY_VER"
 
-# ── Check tkinter (may need python-tk from brew) ───────────────────────────────
-if ! "$PYTHON" -c "import tkinter" &>/dev/null; then
-    err "tkinter not found."
-    echo ""
-    echo "  If you installed Python via Homebrew, run:"
-    echo "    brew install python-tk"
-    echo ""
-    read -rp "  Press Enter to close..."
-    exit 1
-fi
-ok "tkinter available"
 
 # ── Create / reuse virtualenv ──────────────────────────────────────────────────
 VENV="$DIR/.venv"
@@ -77,21 +66,44 @@ VENV_PY="$VENV/bin/python"
 
 # ── Install Python dependencies into venv ─────────────────────────────────────
 echo ""
-info "Installing Python dependencies..."
-"$VENV_PY" -m pip install --quiet -r "$DIR/requirements.txt"
-ok "Dependencies installed (streamlit)"
+info "Installing Python dependencies (streamlit, folium, requests)..."
+"$VENV_PY" -m pip install --quiet \
+    "streamlit>=1.35.0" \
+    "requests>=2.31.0" \
+    "folium>=0.17.0" \
+    "streamlit-folium>=0.22.0"
 
-# ── Create .app bundle on Desktop ─────────────────────────────────────────────
+# ── Install Qt binding — PySide6 preferred, PyQt5 fallback ────────────────────
 echo ""
-info "Creating FieldLog.app on Desktop..."
-"$VENV_PY" "$DIR/install.py"
+info "Installing Qt binding..."
+if "$VENV_PY" -m pip install --quiet "PySide6>=6.5.0,<6.9" 2>/dev/null; then
+    ok "PySide6 installed"
+else
+    info "PySide6 not compatible with this macOS version — trying PyQt5..."
+    if "$VENV_PY" -m pip install --quiet "PyQt5>=5.15" 2>/dev/null; then
+        ok "PyQt5 installed (fallback)"
+    else
+        err "Could not install a Qt binding (PySide6 or PyQt5)."
+        echo ""
+        echo "  Try updating macOS to 10.15.7 or later, then re-run this installer."
+        echo ""
+        read -rp "  Press Enter to close..."
+        exit 1
+    fi
+fi
+
+# ── Create .app bundle + DMG on Desktop ───────────────────────────────────────
+echo ""
+info "Creating FieldLog.app and FieldLog.dmg on Desktop..."
+"$VENV_PY" "$DIR/install.py" --dmg --skip-qt
 
 # ── Done ───────────────────────────────────────────────────────────────────────
 echo ""
 echo -e "${BOLD} ========================================"
 echo -e "   Installation complete!"
-echo -e "   FieldLog.app is on your Desktop."
-echo -e "   Drag it to /Applications to keep it.${RESET}"
+echo -e ""
+echo -e "   FieldLog.app  →  drag to /Applications to install"
+echo -e "   FieldLog.dmg  →  share this file to distribute FieldLog${RESET}"
 echo -e "${BOLD} ========================================${RESET}"
 echo ""
 read -rp "  Press Enter to close..."

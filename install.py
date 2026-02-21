@@ -70,16 +70,43 @@ def _install_linux_system_deps():
         step( "   Run manually:  sudo apt-get install -y " + " ".join(missing))
 
 
-def install_deps():
+def _install_qt():
+    """Install PySide6, falling back to PyQt5 if PySide6 is incompatible."""
+    for pkg in ("PySide6>=6.5.0,<6.9", "PyQt5>=5.15"):
+        try:
+            subprocess.check_call(
+                [PYTHON, "-m", "pip", "install", pkg],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            label = "PySide6" if "PySide6" in pkg else "PyQt5 (fallback)"
+            step(f"✓ Qt installed     → {label}")
+            return
+        except subprocess.CalledProcessError:
+            continue
+    step("⚠  Could not install PySide6 or PyQt5 — launcher UI will not work.")
+
+
+def install_deps(skip_qt: bool = False):
     if SYSTEM == "Linux":
         _install_linux_system_deps()
     step("Installing Python dependencies...")
+    # Filter Qt packages — Qt is installed separately via _install_qt() with
+    # PySide6 → PyQt5 fallback logic.  On Mac, mac_install.command already
+    # handled Qt before calling install.py, so skip_qt=True avoids overwriting
+    # the working fallback.
+    non_qt = [
+        l.strip() for l in (HERE / "requirements.txt").read_text(encoding="utf-8").splitlines()
+        if l.strip() and not l.startswith("#") and "PySide6" not in l and "PyQt5" not in l
+    ]
     subprocess.check_call(
-        [PYTHON, "-m", "pip", "install", "-r", str(HERE / "requirements.txt")],
+        [PYTHON, "-m", "pip", "install"] + non_qt,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
     step("✓ Dependencies installed")
+    if not skip_qt:
+        _install_qt()
 
 
 # ── Icon generation ────────────────────────────────────────────────────────────
@@ -358,7 +385,8 @@ def create_shortcut_windows(icon: Path | None = None):
 # ── Entry point ────────────────────────────────────────────────────────────────
 
 def main():
-    build_dmg = "--dmg" in sys.argv
+    build_dmg = "--dmg"       in sys.argv
+    skip_qt   = "--skip-qt"   in sys.argv
 
     banner("FieldLog Installer")
     print(f"  Platform : {SYSTEM}")
@@ -369,7 +397,7 @@ def main():
     print()
 
     try:
-        install_deps()
+        install_deps(skip_qt=skip_qt)
     except subprocess.CalledProcessError as e:
         print(f"\n  ✗ Dependency install failed: {e}")
         sys.exit(1)

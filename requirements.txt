@@ -2,4 +2,7 @@ streamlit>=1.35.0
 requests>=2.31.0
 folium>=0.17.0
 streamlit-folium>=0.22.0
-PySide6>=6.5.0
+# Qt: install PySide6 OR PyQt5 — mac_install.command handles this automatically.
+# On Linux/Windows run:  pip install "PySide6>=6.5.0,<6.9"
+# On older macOS run:    pip install "PyQt5>=5.15"
+PySide6>=6.5.0,<6.9

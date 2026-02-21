@@ -16,6 +16,7 @@ from datetime import datetime, date, time as dtime
 from pathlib import Path
 
 import streamlit as st
+import streamlit.components.v1 as _components
 import csv_manager
 
 
@@ -228,6 +229,25 @@ st.markdown(_BASE_CSS, unsafe_allow_html=True)
 if st.session_state.get("webapp_theme", "light") == "dark":
     st.markdown(_DARK_CSS, unsafe_allow_html=True)
 
+# ── Login Gate ─────────────────────────────────────────────────────────────────
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+
+if not st.session_state.logged_in:
+    st.title("📋 FieldLog")
+    _, _lc, _ = st.columns([1, 1, 1])
+    with _lc:
+        st.subheader("Sign In")
+        _lu = st.text_input("Username", key="login_username")
+        _lp = st.text_input("Password", type="password", key="login_password")
+        if st.button("Login", use_container_width=True, type="primary"):
+            if _lu == "uamtec" and _lp == "summer11":
+                st.session_state.logged_in = True
+                st.rerun()
+            else:
+                st.error("Invalid username or password.")
+    st.stop()
+
 st.title("📋 FieldLog — UAM Deployment Entry")
 
 
@@ -350,6 +370,10 @@ with st.sidebar:
         st.session_state.webapp_theme = "light" if _is_dark else "dark"
         st.rerun()
 
+    if st.button("🔓 Logout", use_container_width=True):
+        st.session_state.logged_in = False
+        st.rerun()
+
     st.markdown("---")
     st.header("Project")
     existing = csv_manager.list_existing_projects()
@@ -374,6 +398,16 @@ with st.sidebar:
                 st.rerun()
         except Exception as ex:
             st.error(f"Folder picker error: {ex}")
+
+    with st.expander("☁ Google Drive tip"):
+        st.markdown(
+            "Install **Google Drive for Desktop** and sign in. "
+            "It mounts your Drive as a local folder — e.g.\n\n"
+            "**Mac:** `~/Library/CloudStorage/GoogleDrive-you@gmail.com/My Drive/FieldLog`\n\n"
+            "**Windows:** `G:\\My Drive\\FieldLog`\n\n"
+            "Then click **📁 Change Folder** and point FieldLog at that path. "
+            "All data will sync to Drive automatically."
+        )
 
     st.markdown("---")
     st.subheader("Danger Zone")
@@ -535,9 +569,24 @@ if st.session_state.gc_results:
 st.divider()
 
 
-# ── Location Map ───────────────────────────────────────────────────────────────
+# ── ArcGIS Browser + Location Map Tabs ────────────────────────────────────────
 
-_map_tab, = st.tabs(["📍 Location Map"])
+_arc_tab, _map_tab = st.tabs(["🌐 ArcGIS", "📍 Location Map"])
+
+with _arc_tab:
+    _open_col, _ = st.columns([1, 4])
+    with _open_col:
+        st.link_button(
+            "🌐 Open in New Tab",
+            _ARCGIS_EXPERIENCE_URL,
+            use_container_width=True,
+            type="primary",
+        )
+    st.caption(
+        "Navigate to a structure in ArcGIS, copy the URL from the address bar, "
+        "then paste it into the **ArcGIS Structure Link** section below."
+    )
+    _components.iframe(_ARCGIS_EXPERIENCE_URL, height=580, scrolling=True)
 
 with _map_tab:
     if _HAS_FOLIUM:
