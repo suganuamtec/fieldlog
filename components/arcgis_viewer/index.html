@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{width:100%;overflow:hidden;}
+  body{font-family:system-ui,-apple-system,sans-serif;background:#1e293b;}
+
+  .bar{
+    display:flex;align-items:center;flex-wrap:wrap;gap:8px;
+    padding:8px 12px;background:#1e293b;border-bottom:1px solid #334155;
+  }
+  .btn{
+    display:inline-flex;align-items:center;gap:5px;
+    padding:7px 14px;color:#fff;text-decoration:none;border:none;
+    border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;
+    white-space:nowrap;font-family:inherit;line-height:1;
+  }
+  .blue{background:#2563eb;} .blue:hover{background:#1d4ed8;}
+  .green{background:#16a34a;} .green:hover{background:#15803d;}
+  .hint{color:#94a3b8;font-size:11px;line-height:1.5;flex:1;min-width:0;}
+
+  iframe{display:block;width:100%;border:none;}
+
+  .log{
+    padding:5px 12px;font-size:11px;font-family:monospace;min-height:22px;
+    background:#0f172a;color:#34d399;white-space:pre-wrap;word-break:break-all;
+    border-top:1px solid #0f172a;
+  }
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <a id="ntab" class="btn blue" href="" target="_blank">&#8599; Open in New Tab</a>
+  <button class="btn green" id="cbtn">&#128203; Grab from Clipboard</button>
+  <span class="hint">
+    1&nbsp;Open in new tab &nbsp;&rarr;&nbsp;
+    2&nbsp;Click a structure &nbsp;&rarr;&nbsp;
+    3&nbsp;Copy the URL &nbsp;&rarr;&nbsp;
+    4&nbsp;Click&nbsp;<strong>Grab from Clipboard</strong>
+  </span>
+</div>
+
+<iframe id="agx" allow="geolocation;fullscreen" allowfullscreen></iframe>
+
+<div class="log" id="log">
+  Ready &#8212; click &ldquo;Open in New Tab&rdquo;, click a structure, copy the URL, then click Grab from Clipboard.
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ── Streamlit component message protocol ─────────────────────────── */
+  var IS  = "isStreamlitMessage";
+  var READY      = "streamlit:componentReady";
+  var RENDER     = "streamlit:render";
+  var SETVAL     = "streamlit:setComponentValue";
+  var SETHEIGHT  = "streamlit:setFrameHeight";
+
+  var agx  = document.getElementById("agx");
+  var ntab = document.getElementById("ntab");
+  var log  = document.getElementById("log");
+
+  var DEFAULT_URL = "https://experience.arcgis.com/experience/f703e7a448e44768b11f7ca209b61edd";
+
+  function post(type, extra) {
+    var m = {}; m[IS] = true; m.type = type;
+    if (extra) { Object.keys(extra).forEach(function(k){ m[k]=extra[k]; }); }
+    window.parent.postMessage(m, "*");
+  }
+
+  function pushHeight() {
+    post(SETHEIGHT, { height: document.documentElement.scrollHeight || document.body.scrollHeight });
+  }
+
+  function setViewerURL(url) {
+    agx.src  = url;
+    ntab.href = url;
+  }
+
+  /* Send the URL back to Python */
+  function capture(url) {
+    log.style.color = "#34d399";
+    log.textContent = "\u2713 Captured: " + url;
+    post(SETVAL, { value: url, dataType: "json" });
+  }
+
+  function isAGX(s) {
+    return s && (
+      s.indexOf("experience.arcgis.com") !== -1 ||
+      s.indexOf("arcgis.com/apps/")      !== -1
+    );
+  }
+
+  /* ── Clipboard button ─────────────────────────────────────────────── */
+  document.getElementById("cbtn").addEventListener("click", function () {
+    if (!navigator.clipboard || !navigator.clipboard.readText) {
+      log.style.color = "#fbbf24";
+      log.textContent = "\u26A0 Clipboard API not available in this browser. Paste the URL in the field below instead.";
+      return;
+    }
+    navigator.clipboard.readText().then(function (text) {
+      text = (text || "").trim();
+      if (isAGX(text)) {
+        capture(text);
+      } else {
+        log.style.color = "#f87171";
+        log.textContent = "\u2717 Clipboard does not contain an ArcGIS URL:\n" + text.substring(0, 120);
+      }
+    }).catch(function (err) {
+      log.style.color = "#fbbf24";
+      log.textContent = "\u26A0 Clipboard access denied: " + err + "\nPaste the URL in the field below instead.";
+    });
+  });
+
+  /* ── Listen for ArcGIS postMessage events (auto-capture if possible) */
+  window.addEventListener("message", function (e) {
+    if (!e.data || e.data[IS]) return;          // skip Streamlit's own messages
+    var o = e.origin || "";
+    if (o.indexOf("arcgis.com") === -1 && o.indexOf("esri.com") === -1) return;
+
+    var raw = typeof e.data === "string" ? e.data : JSON.stringify(e.data);
+    log.style.color = "#60a5fa";
+    log.textContent = "ArcGIS event from " + o + ":\n" + raw.substring(0, 300);
+
+    /* Try to extract an ArcGIS experience URL from the event payload */
+    try {
+      var d = typeof e.data === "object" ? e.data : JSON.parse(e.data);
+      if (d && d.url && isAGX(d.url)) { capture(d.url); return; }
+      var m = raw.match(/experience\.arcgis\.com\/experience\/[^"\\&\s]+/);
+      if (m) { capture("https://" + m[0]); }
+    } catch (_) {}
+  });
+
+  /* ── Streamlit render event (receives props from Python) ─────────── */
+  window.addEventListener("message", function (e) {
+    if (!e.data || !e.data[IS] || e.data.type !== RENDER) return;
+    var args = e.data.args || {};
+    var url  = args.experience_url || DEFAULT_URL;
+    var h    = args.height         || 640;
+    setViewerURL(url);
+    agx.style.height = h + "px";
+    setTimeout(pushHeight, 200);
+  });
+
+  /* ── Initialise ───────────────────────────────────────────────────── */
+  setViewerURL(DEFAULT_URL);
+  agx.style.height = "640px";
+  agx.addEventListener("load", function () { setTimeout(pushHeight, 100); });
+  setTimeout(pushHeight, 600);
+
+  /* Signal to Streamlit that the component is ready */
+  post(READY, { apiVersion: 1 });
+
+}());
+</script>
+</body>
+</html>

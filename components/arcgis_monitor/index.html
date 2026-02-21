@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html><head><style>*{margin:0;padding:0;}html,body{height:0;overflow:hidden;}</style></head>
+<body><script>
+/* Tiny hidden component — polls localStorage for URLs captured by the viewer,
+   sends them to Python via the Streamlit component protocol. */
+(function () {
+  var IS = "isStreamlitMessage";
+
+  function post(type, extra) {
+    var m = {}; m[IS] = true; m.type = type;
+    if (extra) { Object.keys(extra).forEach(function (k) { m[k] = extra[k]; }); }
+    window.parent.postMessage(m, "*");
+  }
+
+  /* Stay at 0 height so this component is invisible */
+  post("streamlit:setFrameHeight", { height: 0 });
+  post("streamlit:componentReady", { apiVersion: 1 });
+
+  var lastSent = localStorage.getItem("_agx_sent") || "";
+
+  setInterval(function () {
+    var url = localStorage.getItem("_agx_url") || "";
+    if (url && url !== lastSent) {
+      lastSent = url;
+      localStorage.setItem("_agx_sent", url);
+      post("streamlit:setComponentValue", { value: url, dataType: "json" });
+    }
+  }, 400);
+}());
+</script></body></html>
