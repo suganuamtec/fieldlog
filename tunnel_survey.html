@@ -1,0 +1,1474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tunnel Survey</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #141414;
+  --panel: #1c1c1c;
+  --surface: #232323;
+  --surface2: #2a2a2a;
+  --border: #333;
+  --border-light: #444;
+  --fg: #c8c8c8;
+  --fg-dim: #777;
+  --fg-bright: #eee;
+  --accent: #ffaa00;
+  --accent-dim: #b37700;
+  --accent-glow: rgba(255,170,0,0.15);
+  --green: #22c55e;
+  --green-dim: #166534;
+  --red: #ef4444;
+  --red-dim: #7f1d1d;
+  --mono: 'JetBrains Mono', monospace;
+  --sans: 'DM Sans', -apple-system, sans-serif;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+body {
+  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 13px;
+}
+
+/* ── Layout ─────────────────────────────────────── */
+#app {
+  display: grid;
+  grid-template-columns: 360px 1fr;
+  grid-template-rows: 1fr 170px;
+  height: 100vh;
+  gap: 1px;
+  background: #0a0a0a;
+}
+#left-panel {
+  grid-row: 1 / 3;
+  background: var(--panel);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  border-right: 1px solid #0a0a0a;
+}
+#map-container {
+  background: var(--bg);
+  position: relative;
+}
+#profile-container {
+  background: var(--panel);
+  border-top: 1px solid #0a0a0a;
+  position: relative;
+}
+
+/* ── Left Panel ─────────────────────────────────── */
+.panel-header {
+  background: linear-gradient(180deg, #252525 0%, var(--panel) 100%);
+  padding: 16px 16px 14px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.panel-header h1 {
+  font-family: var(--mono);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.meta-row {
+  display: flex;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.meta-row label {
+  font-size: 11px;
+  color: var(--fg-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: block;
+  margin-bottom: 2px;
+}
+.meta-row input {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--fg);
+  padding: 4px 8px;
+  border-radius: 3px;
+  font-size: 12px;
+  font-family: var(--sans);
+  width: 100%;
+}
+.meta-row input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-glow);
+}
+
+/* Fetch section */
+.fetch-section {
+  padding: 8px 12px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.fetch-row {
+  display: flex;
+  gap: 4px;
+  align-items: stretch;
+}
+.fetch-section input {
+  flex: 1;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--fg-bright);
+  padding: 6px 8px;
+  border-radius: 3px;
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.3px;
+  min-width: 0;
+}
+.fetch-section input::placeholder { color: var(--fg-dim); }
+.fetch-section input:focus { outline: none; border-color: var(--accent); }
+.fetch-arrow {
+  color: var(--fg-dim);
+  font-family: var(--mono);
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  padding: 0 2px;
+}
+.btn {
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 6px 10px;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.btn:active { transform: scale(0.97); }
+.btn-accent { background: var(--accent); color: #111; }
+.btn-accent:hover { background: var(--accent-dim); }
+.btn-accent:disabled { background: var(--surface2); color: var(--fg-dim); cursor: wait; }
+.btn-ghost { background: var(--surface2); color: var(--fg); border: 1px solid var(--border); }
+.btn-ghost:hover { background: var(--border); color: var(--fg-bright); }
+.btn-danger { background: var(--red-dim); color: var(--red); border: 1px solid transparent; }
+.btn-danger:hover { background: #991b1b; }
+.btn-sm { padding: 5px 9px; font-size: 11px; }
+
+/* Manhole table */
+.mh-table-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.mh-table-wrap::-webkit-scrollbar { width: 5px; }
+.mh-table-wrap::-webkit-scrollbar-track { background: var(--panel); }
+.mh-table-wrap::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+table.mh-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.mh-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--surface);
+  padding: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--fg-dim);
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+.mh-table thead th:first-child { text-align: center; width: 28px; }
+.mh-table tbody tr {
+  cursor: pointer;
+  transition: background 0.1s;
+  border-bottom: 1px solid #1f1f1f;
+}
+.mh-table tbody tr:hover { background: var(--surface); }
+.mh-table tbody tr.selected {
+  background: var(--accent-glow);
+  border-left: 3px solid var(--accent);
+}
+.mh-table tbody td {
+  padding: 5px 6px;
+  font-family: var(--mono);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mh-table tbody td:first-child {
+  text-align: center;
+  color: var(--fg-dim);
+  font-size: 11px;
+  width: 28px;
+}
+.mh-table .dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  margin-right: 5px;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+.mh-table .id-cell {
+  display: flex;
+  align-items: center;
+}
+.row-actions {
+  white-space: nowrap;
+  text-align: right;
+  padding: 2px 4px !important;
+}
+.row-btn {
+  background: none;
+  border: none;
+  color: var(--fg-dim);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 1px 3px;
+  line-height: 1;
+  vertical-align: middle;
+  border-radius: 3px;
+}
+.row-btn:hover:not(:disabled) { color: var(--fg-bright); background: var(--surface2); }
+.row-btn:disabled { opacity: 0.2; cursor: default; }
+.row-btn-del { font-size: 19px; font-weight: bold; line-height: 1; }
+.row-btn-del:hover:not(:disabled) { color: var(--red); }
+
+/* Edit form */
+.edit-section {
+  flex-shrink: 0;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  padding: 8px 12px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+.edit-section.hidden { display: none; }
+.edit-title {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--accent);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.edit-title .invert-badge {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--accent);
+  background: var(--accent-glow);
+  padding: 2px 6px;
+  border-radius: 3px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.edit-grid {
+  display: grid;
+  grid-template-columns: 55px 1fr 55px 1fr;
+  gap: 3px 6px;
+  align-items: center;
+}
+.edit-grid label {
+  font-size: 11px;
+  color: var(--fg-dim);
+  text-transform: uppercase;
+  text-align: right;
+  letter-spacing: 0.3px;
+}
+.edit-grid input, .edit-grid select {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--fg);
+  padding: 4px 6px;
+  border-radius: 3px;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+.edit-grid input:focus, .edit-grid select:focus { outline: none; border-color: var(--accent); }
+.edit-grid select { cursor: pointer; -webkit-appearance: none; }
+.edit-extras {
+  margin-top: 4px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.edit-extras label {
+  font-size: 11px;
+  color: var(--fg-dim);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.edit-extras input[type="checkbox"] { accent-color: var(--accent); }
+
+/* Action bar */
+.action-bar {
+  flex-shrink: 0;
+  display: flex;
+  gap: 3px;
+  padding: 5px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--panel);
+  flex-wrap: wrap;
+  align-items: center;
+}
+.action-bar .spacer { flex: 1; }
+.unit-toggle {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-right: 4px;
+}
+.unit-toggle button {
+  border: none;
+  background: var(--surface2);
+  color: var(--fg-dim);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.unit-toggle button:first-child { border-right: 1px solid var(--border); }
+.unit-toggle button.active {
+  background: var(--accent);
+  color: #111;
+}
+
+/* ── Map ────────────────────────────────────────── */
+#map { width: 100%; height: 100%; }
+.map-overlay {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  z-index: 1000;
+  background: rgba(20,20,20,0.85);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #fff;
+  cursor: pointer;
+  user-select: none;
+  backdrop-filter: blur(4px);
+}
+.map-overlay:hover { background: rgba(30,30,30,0.95); }
+.map-overlay input { accent-color: var(--accent); margin: 0; width: 15px; height: 15px; }
+.map-overlay:has(input:checked) { border-color: var(--accent-dim); }
+.leaflet-control-zoom a {
+  background: var(--surface2) !important;
+  color: var(--fg) !important;
+  border-color: var(--border) !important;
+}
+.leaflet-control-zoom a:hover { background: var(--border) !important; }
+.leaflet-control-attribution {
+  background: rgba(20,20,20,0.8) !important;
+  color: var(--fg-dim) !important;
+  font-size: 10px !important;
+}
+.leaflet-control-attribution a { color: var(--fg-dim) !important; }
+.dist-label {
+  background: rgba(20,20,20,0.85);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 2px 6px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--fg);
+  white-space: nowrap;
+  pointer-events: none;
+}
+.mh-tooltip {
+  background: rgba(20,20,20,0.92) !important;
+  border: 1px solid var(--accent) !important;
+  border-radius: 4px !important;
+  padding: 6px 10px !important;
+  font-family: 'JetBrains Mono', monospace !important;
+  font-size: 11px !important;
+  color: var(--fg-bright) !important;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5) !important;
+}
+.mh-tooltip .leaflet-tooltip-tip { display: none; }
+
+/* ── Profile ────────────────────────────────────── */
+#profile-canvas { width: 100%; height: 100%; display: block; cursor: pointer; }
+
+/* Selected manhole echo ring */
+
+/* ── Status toast ───────────────────────────────── */
+.toast {
+  position: fixed;
+  bottom: 190px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: var(--surface2);
+  color: var(--fg-bright);
+  padding: 8px 20px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  font-size: 12px;
+  font-family: var(--mono);
+  opacity: 0;
+  transition: all 0.3s;
+  pointer-events: none;
+  z-index: 1000;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.toast.error { border-color: var(--red); color: var(--red); }
+.toast.success { border-color: var(--green); color: var(--green); }
+
+/* ── Scrollbar ──────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+/* ── Responsive ─────────────────────────────────── */
+@media (max-width: 900px) {
+  #app {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 300px 150px;
+  }
+  #left-panel { grid-row: auto; max-height: 50vh; }
+}
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div id="left-panel">
+    <div class="panel-header">
+      <h1>Tunnel Survey</h1>
+    </div>
+
+    <div class="meta-row">
+      <div style="flex:0 0 110px"><label>Scan Date</label><input type="date" id="scan-date"></div>
+      <div style="flex:1"><label>Notes</label><input type="text" id="scan-notes" placeholder="Route description..."></div>
+    </div>
+
+    <div class="fetch-section">
+      <div class="fetch-row">
+        <input type="text" id="trace-start" placeholder="Start ID" autocomplete="off">
+        <span class="fetch-arrow">→</span>
+        <input type="text" id="trace-end" placeholder="End ID" autocomplete="off">
+      </div>
+      <div class="fetch-row">
+        <button class="btn btn-accent" id="trace-btn" onclick="traceRoute()" style="flex:1">Trace Route</button>
+        <input type="text" id="fetch-id" placeholder="Single ID" autocomplete="off" style="flex:1">
+        <button class="btn btn-ghost" id="fetch-btn" onclick="fetchById()">Add</button>
+        <button class="btn btn-ghost" onclick="addManual()">Manual</button>
+      </div>
+    </div>
+
+    <div class="mh-table-wrap">
+      <table class="mh-table">
+        <thead>
+          <tr><th>#</th><th>ID</th><th id="th-inv">Invert</th><th id="th-dist">Distance</th><th style="text-align:right;padding-right:16px"><button class="row-btn" onclick="flipOrder()" title="Reverse order" style="font-size:16px;font-weight:bold">&#8597;</button></th></tr>
+        </thead>
+        <tbody id="mh-tbody"></tbody>
+      </table>
+    </div>
+
+    <div class="edit-section hidden" id="edit-section">
+      <div class="edit-title">
+        <span id="edit-label">Edit</span>
+        <span class="invert-badge" id="edit-invert"></span>
+      </div>
+      <div class="edit-grid">
+        <label>ID</label><input type="text" id="ed-id">
+        <label>Lat</label><input type="text" id="ed-lat">
+        <label>Lon</label><input type="text" id="ed-lon">
+        <label>Lid ft</label><input type="text" id="ed-lid">
+        <label>Depth ft</label><input type="text" id="ed-depth">
+      </div>
+      <div class="edit-extras">
+        <label id="ed-nr-label"><input type="checkbox" id="ed-not-reached"> Not reached</label>
+      </div>
+    </div>
+
+    <div class="action-bar">
+      <div class="unit-toggle">
+        <button class="active" onclick="setUnits('metric')">m</button>
+        <button onclick="setUnits('imperial')">ft</button>
+      </div>
+      <span class="spacer"></span>
+      <button class="btn btn-ghost btn-sm" onclick="loadJSON()">Load</button>
+      <button class="btn btn-accent btn-sm" onclick="saveJSON()">Save</button>
+    </div>
+  </div>
+
+  <div id="map-container">
+    <div id="map"></div>
+    <label class="map-overlay" title="Sewer pipes and structures from NavigateLA">
+      <input type="checkbox" id="sewer-toggle" onchange="toggleSewer(this.checked)">
+      <span>Sewer</span>
+    </label>
+  </div>
+  <div id="profile-container"><canvas id="profile-canvas"></canvas></div>
+</div>
+
+<input type="file" id="file-input" accept=".json" style="display:none">
+<div class="toast" id="toast"></div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────
+const state = {
+  scan_date: '',
+  notes: '',
+  manholes: [],
+  pipes: [],
+  selected: null,
+  units: 'metric', // 'metric' or 'imperial'
+};
+
+// ── Units ─────────────────────────────────────────────────────
+function setUnits(u) {
+  state.units = u;
+  document.querySelectorAll('.unit-toggle button').forEach(b => b.classList.remove('active'));
+  document.querySelector(`.unit-toggle button:${u === 'metric' ? 'first' : 'last'}-child`).classList.add('active');
+  refresh();
+}
+function fmtDist(metres) {
+  if (state.units === 'imperial') return (metres * 3.28084).toFixed(0);
+  return metres.toFixed(0);
+}
+function fmtElev(feet) {
+  if (state.units === 'imperial') return feet.toFixed(2);
+  return (feet * 0.3048).toFixed(2);
+}
+function convElev(feet) {
+  return state.units === 'imperial' ? feet : feet * 0.3048;
+}
+function distU() { return state.units === 'imperial' ? 'ft' : 'm'; }
+function elevU() { return state.units === 'imperial' ? 'ft' : 'm'; }
+
+// ── NavigateLA ─────────────────────────────────────────────────
+const NLA_URL = 'https://maps.lacity.org/arcgis/rest/services/Mapping/NavigateLA/MapServer/233/query';
+
+async function fetchNavigateLA(id) {
+  const params = new URLSearchParams({
+    where: `STRUCTURE_ID=${id}`,
+    outFields: 'STRUCTURE_ID,LAT,LON,LID_ELEV,MH_DEPTH',
+    outSR: '4326',
+    f: 'json',
+  });
+  const resp = await fetch(`${NLA_URL}?${params}`);
+  const data = await resp.json();
+  if (!data.features || !data.features.length) throw new Error(`Structure ${id} not found`);
+  const f = data.features[0];
+  const a = f.attributes;
+  const g = f.geometry;
+  const lid = parseFloat(a.LID_ELEV) || 0;
+  const depth = parseFloat(a.MH_DEPTH) || 0;
+  return {
+    id: String(a.STRUCTURE_ID),
+    lat: g ? g.y : parseFloat(a.LAT),
+    lon: g ? g.x : parseFloat(a.LON),
+    lid_elevation_ft: lid,
+    depth_ft: depth,
+    invert_elevation_ft: Math.round((lid - depth) * 100) / 100,
+  };
+}
+
+async function fetchById() {
+  const input = document.getElementById('fetch-id');
+  const btn = document.getElementById('fetch-btn');
+  const id = input.value.trim();
+  if (!id) return;
+  if (state.manholes.some(m => m.id === id)) {
+    toast(`${id} already in list`, 'error');
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = '...';
+  try {
+    const data = await fetchNavigateLA(id);
+    data.path_to_next = 'straight';
+    data._source = 'fetched';
+    state.manholes.push(data);
+    input.value = '';
+    input.focus();
+    mapNeedsFit = true;
+    refresh();
+    toast(`Added ${data.id}`, 'success');
+  } catch (e) {
+    toast(e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Add';
+  }
+}
+
+document.getElementById('fetch-id').addEventListener('keydown', e => {
+  if (e.key === 'Enter') fetchById();
+});
+document.getElementById('trace-end').addEventListener('keydown', e => {
+  if (e.key === 'Enter') traceRoute();
+});
+
+// ── Pipe Network ──────────────────────────────────────────────
+const PIPE_URL = 'https://maps.lacity.org/arcgis/rest/services/Mapping/NavigateLA/MapServer/244/query';
+
+async function traceRoute() {
+  const startInput = document.getElementById('trace-start');
+  const endInput = document.getElementById('trace-end');
+  const btn = document.getElementById('trace-btn');
+  const startId = startInput.value.trim();
+  const endId = endInput.value.trim();
+  if (!startId || !endId) { toast('Enter both start and end IDs', 'error'); return; }
+  if (startId === endId) { toast('Start and end must differ', 'error'); return; }
+
+  btn.disabled = true;
+  btn.textContent = 'Tracing...';
+  try {
+    toast('Fetching manholes...');
+    const [startMH, endMH] = await Promise.all([
+      fetchNavigateLA(startId), fetchNavigateLA(endId),
+    ]);
+
+    toast('Querying pipe network...');
+    const pad = 0.003;
+    const envelope = {
+      xmin: Math.min(startMH.lon, endMH.lon) - pad,
+      ymin: Math.min(startMH.lat, endMH.lat) - pad,
+      xmax: Math.max(startMH.lon, endMH.lon) + pad,
+      ymax: Math.max(startMH.lat, endMH.lat) + pad,
+      spatialReference: { wkid: 4326 },
+    };
+    const pipeParams = new URLSearchParams({
+      geometry: JSON.stringify(envelope),
+      geometryType: 'esriGeometryEnvelope',
+      spatialRel: 'esriSpatialRelIntersects',
+      outFields: 'PIPE_ID,UP_STRUCT,DN_STRUCT,UP_INV,DN_INV,PIPE_LENG,PIPE_SIZE,PIPE_MAT',
+      outSR: '4326', f: 'json', returnGeometry: 'true', resultRecordCount: 2000,
+    });
+    const pipeResp = await fetch(`${PIPE_URL}?${pipeParams}`);
+    const pipeData = await pipeResp.json();
+    const allPipes = pipeData.features || [];
+    if (!allPipes.length) { toast('No pipes found in area', 'error'); return; }
+
+    const graph = {};
+    for (const f of allPipes) {
+      const a = f.attributes;
+      if (!a.UP_STRUCT || !a.DN_STRUCT) continue;
+      if (!graph[a.UP_STRUCT]) graph[a.UP_STRUCT] = [];
+      if (!graph[a.DN_STRUCT]) graph[a.DN_STRUCT] = [];
+      graph[a.UP_STRUCT].push({ pipe: f, next: a.DN_STRUCT });
+      graph[a.DN_STRUCT].push({ pipe: f, next: a.UP_STRUCT });
+    }
+
+    const startInt = parseInt(startId), endInt = parseInt(endId);
+    const visited = new Set([startInt]);
+    const parentMap = {};
+    const queue = [startInt];
+    let found = false;
+    while (queue.length > 0) {
+      const cur = queue.shift();
+      if (cur === endInt) { found = true; break; }
+      const edges = (graph[cur] || [])
+        .sort((a, b) => (b.pipe.attributes.PIPE_SIZE || 0) - (a.pipe.attributes.PIPE_SIZE || 0));
+      for (const edge of edges) {
+        if (!visited.has(edge.next)) {
+          visited.add(edge.next);
+          parentMap[edge.next] = { from: cur, pipe: edge.pipe };
+          queue.push(edge.next);
+        }
+      }
+    }
+    if (!found) { toast('No pipe route found between those manholes', 'error'); return; }
+
+    const pathEdges = [];
+    let node = endInt;
+    while (node !== startInt) {
+      pathEdges.unshift(parentMap[node]);
+      node = parentMap[node].from;
+    }
+    const structIds = [startInt, ...pathEdges.map(e => {
+      const a = e.pipe.attributes;
+      return a.UP_STRUCT === e.from ? a.DN_STRUCT : a.UP_STRUCT;
+    })];
+
+    toast(`Found ${structIds.length} manholes, fetching details...`);
+    const mhParams = new URLSearchParams({
+      where: `STRUCTURE_ID IN (${structIds.join(',')})`,
+      outFields: 'STRUCTURE_ID,LID_ELEV,MH_DEPTH',
+      outSR: '4326', f: 'json', returnGeometry: 'true',
+    });
+    const mhResp = await fetch(`${NLA_URL}?${mhParams}`);
+    const mhData = await mhResp.json();
+    const mhLookup = {};
+    for (const f of (mhData.features || [])) {
+      const a = f.attributes, g = f.geometry;
+      const lid = parseFloat(a.LID_ELEV) || 0;
+      const depth = parseFloat(a.MH_DEPTH) || 0;
+      mhLookup[a.STRUCTURE_ID] = {
+        id: String(a.STRUCTURE_ID),
+        lat: g ? g.y : 0, lon: g ? g.x : 0,
+        lid_elevation_ft: lid, depth_ft: depth,
+        invert_elevation_ft: Math.round((lid - depth) * 100) / 100,
+      };
+    }
+
+    const manholes = [];
+    const pipes = [];
+    for (let i = 0; i < structIds.length; i++) {
+      const mh = mhLookup[structIds[i]] || {
+        id: String(structIds[i]), lat: 0, lon: 0,
+        lid_elevation_ft: 0, depth_ft: 0, invert_elevation_ft: 0,
+      };
+      mh.path_to_next = 'straight';
+      mh._source = 'traced';
+      manholes.push(mh);
+      if (i < pathEdges.length) {
+        const edge = pathEdges[i];
+        const a = edge.pipe.attributes;
+        const coords = edge.pipe.geometry.paths[0].map(p => [p[1], p[0]]);
+        const fwd = (a.UP_STRUCT === edge.from);
+        if (!fwd) coords.reverse();
+        pipes.push({
+          pipe_id: a.PIPE_ID, coords,
+          inv_start: fwd ? a.UP_INV : a.DN_INV,
+          inv_end: fwd ? a.DN_INV : a.UP_INV,
+          pipe_size: a.PIPE_SIZE, pipe_mat: a.PIPE_MAT, length_ft: a.PIPE_LENG,
+        });
+      }
+    }
+    for (let i = 0; i < pipes.length; i++) {
+      if (pipes[i].inv_start != null) manholes[i].invert_elevation_ft = pipes[i].inv_start;
+      if (pipes[i].inv_end != null) manholes[i + 1].invert_elevation_ft = pipes[i].inv_end;
+    }
+
+    state.manholes = manholes;
+    state.pipes = pipes;
+    state.selected = null;
+    mapNeedsFit = true;
+    refresh();
+    toast(`Route: ${manholes.length} manholes, ${pipes.length} pipes`, 'success');
+  } catch (e) {
+    toast(e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Trace Route';
+  }
+}
+
+async function fetchAllPipes() {
+  const mhs = state.manholes;
+  if (mhs.length < 2) return;
+  toast('Fetching pipes...');
+  state.pipes = new Array(mhs.length - 1).fill(null);
+  let found = 0;
+  const promises = [];
+  for (let i = 0; i < mhs.length - 1; i++) {
+    if (!mhs[i].id || !mhs[i + 1].id) { promises.push(Promise.resolve(null)); continue; }
+    const idA = mhs[i].id, idB = mhs[i + 1].id;
+    const where = `(UP_STRUCT=${idA} AND DN_STRUCT=${idB}) OR (UP_STRUCT=${idB} AND DN_STRUCT=${idA})`;
+    promises.push(
+      fetch(`${PIPE_URL}?${new URLSearchParams({
+        where, outFields: 'PIPE_ID,UP_STRUCT,DN_STRUCT,UP_INV,DN_INV,PIPE_LENG,PIPE_SIZE,PIPE_MAT',
+        outSR: '4326', f: 'json', returnGeometry: 'true',
+      })}`).then(r => r.json()).then(data => {
+        if (!data.features || !data.features.length) return null;
+        const f = data.features[0], a = f.attributes;
+        const coords = f.geometry.paths[0].map(p => [p[1], p[0]]);
+        const fwd = String(a.UP_STRUCT) === idA;
+        if (!fwd) coords.reverse();
+        return {
+          pipe_id: a.PIPE_ID, coords,
+          inv_start: fwd ? a.UP_INV : a.DN_INV,
+          inv_end: fwd ? a.DN_INV : a.UP_INV,
+          pipe_size: a.PIPE_SIZE, pipe_mat: a.PIPE_MAT, length_ft: a.PIPE_LENG,
+        };
+      }).catch(() => null)
+    );
+  }
+  const results = await Promise.all(promises);
+  results.forEach((pipe, i) => {
+    state.pipes[i] = pipe;
+    if (pipe) {
+      found++;
+      if (pipe.inv_start != null) mhs[i].invert_elevation_ft = pipe.inv_start;
+      if (pipe.inv_end != null) mhs[i + 1].invert_elevation_ft = pipe.inv_end;
+    }
+  });
+  refresh();
+  toast(`Fetched ${found}/${mhs.length - 1} pipes`, found ? 'success' : 'error');
+}
+
+function polylineMidpoint(coords) {
+  if (!coords || coords.length < 2) return null;
+  let totalLen = 0;
+  const lens = [];
+  for (let i = 1; i < coords.length; i++) {
+    const l = haversine(coords[i-1][0], coords[i-1][1], coords[i][0], coords[i][1]);
+    lens.push(l); totalLen += l;
+  }
+  const half = totalLen / 2;
+  let cum = 0;
+  for (let i = 0; i < lens.length; i++) {
+    if (cum + lens[i] >= half) {
+      const t = (half - cum) / lens[i];
+      return [
+        coords[i][0] + t * (coords[i+1][0] - coords[i][0]),
+        coords[i][1] + t * (coords[i+1][1] - coords[i][1]),
+      ];
+    }
+    cum += lens[i];
+  }
+  return coords[Math.floor(coords.length / 2)];
+}
+
+// ── Manhole ops ────────────────────────────────────────────────
+function addManual() {
+  state.manholes.push({
+    id: '', lat: 0, lon: 0,
+    lid_elevation_ft: 0, depth_ft: 0, invert_elevation_ft: 0,
+    path_to_next: 'straight', _source: 'manual',
+  });
+  state.selected = state.manholes.length - 1;
+  refresh();
+  setTimeout(() => document.getElementById('ed-id')?.focus(), 50);
+}
+
+function deleteSelected() {
+  if (state.selected === null) return;
+  deleteAt(state.selected);
+}
+
+function deleteAt(i) {
+  const n = state.manholes.length;
+  // Merge adjacent pipe polylines when deleting a mid-route manhole
+  if (state.pipes.length > 0 && i > 0 && i < n - 1) {
+    const before = state.pipes[i - 1];
+    const after = state.pipes[i];
+    if (before && after && before.coords && after.coords) {
+      // Join polylines, skip duplicate shared point
+      const merged = [...before.coords, ...after.coords.slice(1)];
+      state.pipes[i - 1] = {
+        coords: merged,
+        inv_start: before.inv_start,
+        inv_end: after.inv_end,
+        pipe_size: before.pipe_size || after.pipe_size,
+        pipe_mat: before.pipe_mat || after.pipe_mat,
+      };
+    }
+    state.pipes.splice(i, 1);
+  } else if (state.pipes.length > 0) {
+    // Deleting first or last — just remove the adjacent pipe
+    if (i === 0 && state.pipes.length > 0) state.pipes.splice(0, 1);
+    else if (i === n - 1 && state.pipes.length >= i) state.pipes.splice(i - 1, 1);
+  }
+  state.manholes.splice(i, 1);
+  state.selected = null;
+  refresh();
+}
+
+function flipOrder() {
+  state.manholes.reverse();
+  state.pipes.reverse();
+  state.pipes.forEach(p => {
+    if (p && p.coords) { p.coords.reverse(); [p.inv_start, p.inv_end] = [p.inv_end, p.inv_start]; }
+  });
+  state.selected = null;
+  refresh();
+  toast('Order reversed');
+}
+
+function moveSelected(dir, fromIdx) {
+  const i = fromIdx !== undefined ? fromIdx : state.selected;
+  if (i === null || i === undefined) return;
+  const j = i + dir;
+  if (j < 0 || j >= state.manholes.length) return;
+  [state.manholes[i], state.manholes[j]] = [state.manholes[j], state.manholes[i]];
+  state.pipes = [];
+  state.selected = j;
+  refresh();
+}
+
+// ── Compute ────────────────────────────────────────────────────
+function haversine(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const toRad = x => x * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function computeDistances() {
+  let cum = 0;
+  return state.manholes.map((m, i) => {
+    if (i > 0) {
+      const pipe = state.pipes[i - 1];
+      if (pipe && pipe.coords && pipe.coords.length > 1) {
+        for (let j = 1; j < pipe.coords.length; j++)
+          cum += haversine(pipe.coords[j-1][0], pipe.coords[j-1][1], pipe.coords[j][0], pipe.coords[j][1]);
+      } else {
+        const p = state.manholes[i - 1];
+        cum += haversine(p.lat, p.lon, m.lat, m.lon);
+      }
+    }
+    return cum;
+  });
+}
+
+function getInvert(m, i) {
+  if (state.pipes.length) {
+    if (i < state.pipes.length && state.pipes[i]?.inv_start != null) return state.pipes[i].inv_start;
+    if (i > 0 && state.pipes[i - 1]?.inv_end != null) return state.pipes[i - 1].inv_end;
+  }
+  return m.invert_elevation_ft || ((m.lid_elevation_ft || 0) - (m.depth_ft || 0));
+}
+
+// ── Refresh ────────────────────────────────────────────────────
+function refresh() {
+  renderTable();
+  renderEditForm();
+  updateMap();
+  drawProfile();
+  document.getElementById('th-inv').textContent = `Inv (${elevU()})`;
+  document.getElementById('th-dist').textContent = `Dist (${distU()})`;
+}
+
+// ── Table rendering ────────────────────────────────────────────
+function renderTable() {
+  const tbody = document.getElementById('mh-tbody');
+  tbody.innerHTML = '';
+  const n = state.manholes.length;
+  const dists = computeDistances();
+  state.manholes.forEach((m, i) => {
+    const tr = document.createElement('tr');
+    if (i === state.selected) tr.classList.add('selected');
+    tr.onclick = () => { state.selected = (state.selected === i) ? null : i; refresh(); };
+
+    let dotColor = 'var(--accent)';
+    if (m.not_reached) dotColor = 'var(--accent-dim)';
+    else if (i === 0) dotColor = 'var(--green)';
+    else if (i === n - 1) dotColor = 'var(--red)';
+
+    const inv = getInvert(m, i);
+    const invStr = inv ? fmtElev(inv) : '\u2014';
+    const distStr = fmtDist(dists[i]);
+
+    tr.innerHTML = `
+      <td>${i + 1}</td>
+      <td><div class="id-cell"><span class="dot" style="background:${dotColor}"></span>${m.id || '\u2014'}</div></td>
+      <td>${invStr}</td>
+      <td>${distStr}</td>
+      <td class="row-actions">${m._source === 'traced' ? '' : `
+        <button class="row-btn" onclick="event.stopPropagation();moveSelected(-1,${i})" title="Move up" ${i === 0 ? 'disabled' : ''}>&#9650;</button>
+        <button class="row-btn" onclick="event.stopPropagation();moveSelected(1,${i})" title="Move down" ${i === n-1 ? 'disabled' : ''}>&#9660;</button>`}
+        <button class="row-btn row-btn-del" onclick="event.stopPropagation();deleteAt(${i})" title="Delete">&times;</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+// ── Edit form ──────────────────────────────────────────────────
+function renderEditForm() {
+  const sec = document.getElementById('edit-section');
+  const i = state.selected;
+  if (i === null || i >= state.manholes.length) {
+    sec.classList.add('hidden');
+    return;
+  }
+  sec.classList.remove('hidden');
+  const m = state.manholes[i];
+  const n = state.manholes.length;
+
+  document.getElementById('edit-label').textContent = `Edit: ${m.id || '(new)'}`;
+
+  const inv = getInvert(m, i);
+  document.getElementById('edit-invert').textContent = inv ? `Inv: ${fmtElev(inv)} ${elevU()}` : '\u2014';
+
+  const isManual = m._source === 'manual';
+  document.getElementById('ed-id').value = m.id || '';
+  document.getElementById('ed-id').disabled = !isManual;
+  document.getElementById('ed-lat').value = m.lat || '';
+  document.getElementById('ed-lat').disabled = !isManual;
+  document.getElementById('ed-lon').value = m.lon || '';
+  document.getElementById('ed-lon').disabled = !isManual;
+  document.getElementById('ed-lid').value = m.lid_elevation_ft || '';
+  document.getElementById('ed-lid').disabled = !isManual;
+  document.getElementById('ed-depth').value = m.depth_ft || '';
+  document.getElementById('ed-depth').disabled = !isManual;
+
+  const nrLabel = document.getElementById('ed-nr-label');
+  const nrCb = document.getElementById('ed-not-reached');
+  if (i === n - 1 && n > 1) {
+    nrLabel.style.display = '';
+    nrCb.checked = !!m.not_reached;
+  } else {
+    nrLabel.style.display = 'none';
+  }
+}
+
+function applyEdit() {
+  const i = state.selected;
+  if (i === null || i >= state.manholes.length) return;
+  const m = state.manholes[i];
+  if (m._source === 'manual') {
+    m.id = document.getElementById('ed-id').value.trim();
+    m.lat = parseFloat(document.getElementById('ed-lat').value) || 0;
+    m.lon = parseFloat(document.getElementById('ed-lon').value) || 0;
+    m.lid_elevation_ft = parseFloat(document.getElementById('ed-lid').value) || 0;
+    m.depth_ft = parseFloat(document.getElementById('ed-depth').value) || 0;
+    m.invert_elevation_ft = Math.round((m.lid_elevation_ft - m.depth_ft) * 100) / 100;
+  }
+  m.not_reached = document.getElementById('ed-not-reached').checked;
+  refresh();
+}
+
+['ed-id','ed-lat','ed-lon','ed-lid','ed-depth'].forEach(id => {
+  const el = document.getElementById(id);
+  el.addEventListener('change', applyEdit);
+  el.addEventListener('keydown', e => { if (e.key === 'Enter') applyEdit(); });
+});
+document.getElementById('ed-not-reached').addEventListener('change', applyEdit);
+
+// ── Leaflet Map ────────────────────────────────────────────────
+const map = L.map('map', { zoomControl: true, attributionControl: true });
+
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+  attribution: 'Esri World Imagery', maxZoom: 20,
+}).addTo(map);
+
+// ── Sewer overlay ──────────────────────────────────────────────
+const SEWER_URL = 'https://maps.lacity.org/arcgis/rest/services/Mapping/NavigateLA/MapServer';
+const SEWER_LAYERS = 'show:233,238,243,244';
+
+const SewerLayer = L.GridLayer.extend({
+  createTile: function(coords, done) {
+    const img = document.createElement('img');
+    const size = this.getTileSize();
+    const nwPoint = coords.scaleBy(size);
+    const sePoint = nwPoint.add(size);
+    const nw = this._map.unproject(nwPoint, coords.z);
+    const se = this._map.unproject(sePoint, coords.z);
+    const nwM = L.CRS.EPSG3857.project(nw);
+    const seM = L.CRS.EPSG3857.project(se);
+    const bbox = `${nwM.x},${seM.y},${seM.x},${nwM.y}`;
+    img.src = `${SEWER_URL}/export?bbox=${bbox}&bboxSR=3857&imageSR=3857` +
+      `&size=${size.x},${size.y}&layers=${SEWER_LAYERS}` +
+      `&format=png32&transparent=true&f=image`;
+    img.width = size.x;
+    img.height = size.y;
+    img.onload = () => done(null, img);
+    img.onerror = () => done(null, img);
+    return img;
+  }
+});
+
+let sewerLayer = null;
+function toggleSewer(on) {
+  if (on) {
+    if (!sewerLayer) sewerLayer = new SewerLayer({ opacity: 0.8, maxZoom: 20 });
+    sewerLayer.addTo(map);
+  } else if (sewerLayer) {
+    map.removeLayer(sewerLayer);
+  }
+}
+
+let mapLayers = L.layerGroup().addTo(map);
+let mapNeedsFit = true;
+
+function updateMap() {
+  mapLayers.clearLayers();
+  const mhs = state.manholes.filter(m => m.lat && m.lon);
+  if (!mhs.length) return;
+  const n = mhs.length;
+  const allMhs = state.manholes;
+  const dists = computeDistances();
+
+  // 1. Polylines
+  for (let i = 0; i < n - 1; i++) {
+    const a = mhs[i], b = mhs[i + 1];
+    const oi = allMhs.indexOf(a);
+    const pipe = state.pipes[oi];
+    const notReached = b.not_reached;
+    const latlngs = (pipe && pipe.coords) ? pipe.coords : [[a.lat, a.lon], [b.lat, b.lon]];
+    mapLayers.addLayer(L.polyline(latlngs, {
+      color: notReached ? '#886600' : '#ffaa00',
+      weight: 3,
+      opacity: notReached ? 0.5 : 0.85,
+      dashArray: notReached ? '6 8' : null,
+    }));
+  }
+
+  // 3. Distance labels (above echo ring)
+  for (let i = 0; i < n - 1; i++) {
+    const a = mhs[i], b = mhs[i + 1];
+    const oi = allMhs.indexOf(a);
+    const pipe = state.pipes[oi];
+    const mid = (pipe && pipe.coords) ? polylineMidpoint(pipe.coords) : [(a.lat+b.lat)/2, (a.lon+b.lon)/2];
+    const segDist = dists[allMhs.indexOf(b)] - dists[allMhs.indexOf(a)];
+    const icon = L.divIcon({
+      className: 'dist-label',
+      html: `${fmtDist(segDist)}${distU()}`,
+      iconSize: null,
+    });
+    if (mid) mapLayers.addLayer(L.marker(mid, { icon, interactive: false, zIndexOffset: 1000 }));
+  }
+
+  // 4. Circle markers + tooltips (topmost)
+  mhs.forEach((m, i) => {
+    let color = '#ffaa00';
+    if (m.not_reached) color = '#886600';
+    else if (i === 0) color = '#22c55e';
+    else if (i === n - 1) color = '#ef4444';
+
+    const oi = allMhs.indexOf(m);
+    const isSelected = oi === state.selected;
+    const cumDist = dists[oi];
+    const inv = getInvert(m, oi);
+
+    const marker = L.circleMarker([m.lat, m.lon], {
+      radius: isSelected ? 9 : 7, fillColor: color, color: '#fff', weight: isSelected ? 2.5 : 1.5, fillOpacity: 0.9,
+    });
+
+    const pipe = state.pipes[oi];
+    const pipeInfo = pipe ? `${pipe.pipe_size || '?'}" ${pipe.pipe_mat || ''}` : '';
+    const tooltipHtml = `
+      <div><strong>${m.id || '?'}</strong></div>
+      <div>${fmtDist(cumDist)} ${distU()} cumulative</div>
+      <div>Invert: ${inv ? fmtElev(inv) : '\u2014'} ${elevU()}</div>
+      ${pipeInfo ? `<div style="color:#ffaa00">${pipeInfo}</div>` : ''}
+    `;
+    marker.bindTooltip(tooltipHtml, { className: 'mh-tooltip', direction: 'top', offset: [0, -10] });
+    marker.on('click', () => { state.selected = oi; refresh(); });
+    mapLayers.addLayer(marker);
+  });
+
+  if (mapNeedsFit) {
+    const bounds = L.latLngBounds(mhs.map(m => [m.lat, m.lon]));
+    map.fitBounds(bounds, { padding: [40, 40], maxZoom: 17 });
+    mapNeedsFit = false;
+  }
+}
+
+// ── Elevation Profile ──────────────────────────────────────────
+function drawProfile() {
+  const canvas = document.getElementById('profile-canvas');
+  const container = document.getElementById('profile-container');
+  const dpr = window.devicePixelRatio || 1;
+  const w = container.clientWidth;
+  const h = container.clientHeight;
+  canvas.width = w * dpr;
+  canvas.height = h * dpr;
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, w, h);
+
+  const mhs = state.manholes;
+  if (mhs.length < 2) return;
+  const invertsFt = mhs.map((m, i) => getInvert(m, i));
+  if (invertsFt.every(v => v === 0)) return;
+  const inverts = invertsFt.map(v => convElev(v));
+
+  const dists = computeDistances();
+  const distsDisplay = dists.map(d => state.units === 'imperial' ? d * 3.28084 : d);
+  const totalDist = distsDisplay[distsDisplay.length - 1];
+  if (totalDist < 0.01) return;
+
+  const ml = 60, mr = 30, mt = 20, mb = 28;
+  const pw = w - ml - mr;
+  const ph = h - mt - mb;
+  if (pw < 20 || ph < 20) return;
+
+  let eMin = Math.min(...inverts);
+  let eMax = Math.max(...inverts);
+  let eRange = eMax - eMin;
+  if (eRange < 0.01) eRange = 1;
+  eMin -= eRange * 0.15;
+  eMax += eRange * 0.15;
+  eRange = eMax - eMin;
+
+  const toX = d => ml + (d / totalDist) * pw;
+  const toY = e => mt + (1 - (e - eMin) / eRange) * ph;
+
+  ctx.strokeStyle = '#2a2a2a';
+  ctx.lineWidth = 1;
+  ctx.font = '10px JetBrains Mono';
+  ctx.fillStyle = '#666';
+  ctx.textAlign = 'right';
+  for (let i = 0; i <= 4; i++) {
+    const e = eMin + (i / 4) * eRange;
+    const y = toY(e);
+    ctx.beginPath(); ctx.moveTo(ml, y); ctx.lineTo(w - mr, y); ctx.stroke();
+    ctx.fillText(e.toFixed(1), ml - 6, y + 3);
+  }
+
+  ctx.save();
+  ctx.translate(12, mt + ph / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#666';
+  ctx.font = '10px DM Sans';
+  ctx.fillText(`Invert (${elevU()})`, 0, 0);
+  ctx.restore();
+
+  const n = mhs.length;
+  for (let i = 0; i < n - 1; i++) {
+    const x1 = toX(distsDisplay[i]), y1 = toY(inverts[i]);
+    const x2 = toX(distsDisplay[i+1]), y2 = toY(inverts[i+1]);
+    const notReached = mhs[i+1].not_reached;
+
+    ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+    ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(x1+1, y1+1); ctx.lineTo(x2+1, y2+1); ctx.stroke();
+
+    ctx.strokeStyle = notReached ? '#886600' : '#ffaa00';
+    ctx.lineWidth = 2.5;
+    if (notReached) ctx.setLineDash([5, 7]); else ctx.setLineDash([]);
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    ctx.setLineDash([]);
+
+    const segDistM = dists[i+1] - dists[i];
+    const fallFt = invertsFt[i+1] - invertsFt[i];
+    const fall = inverts[i+1] - inverts[i];
+    let label;
+    if (segDistM > 0.01) {
+      const grade = (fallFt * 0.3048 / segDistM) * 100;
+      const sign = fall >= 0 ? '+' : '';
+      label = `${sign}${fall.toFixed(1)}${elevU()}  ${grade >= 0 ? '+' : ''}${grade.toFixed(2)}%`;
+    } else {
+      label = `${fall >= 0 ? '+' : ''}${fall.toFixed(1)}${elevU()}`;
+    }
+    const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+    ctx.font = '10px JetBrains Mono';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    ctx.fillText(label, mx + 1, my - 9);
+    ctx.fillStyle = '#ccc';
+    ctx.fillText(label, mx, my - 10);
+  }
+
+  // Store dot positions for click detection
+  state._profileDots = [];
+  for (let i = 0; i < n; i++) {
+    const x = toX(distsDisplay[i]), y = toY(inverts[i]);
+    let fill = '#ffaa00';
+    if (mhs[i].not_reached) fill = '#886600';
+    else if (i === 0) fill = '#22c55e';
+    else if (i === n - 1) fill = '#ef4444';
+
+    const isSelected = i === state.selected;
+    const r = isSelected ? 7 : 5;
+
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fillStyle = fill;
+    ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = isSelected ? 2.5 : 1.5;
+    ctx.stroke();
+
+    state._profileDots.push({ x, y, idx: i, r: 14 });
+  }
+}
+
+new ResizeObserver(() => drawProfile()).observe(document.getElementById('profile-container'));
+
+// Profile hover tooltip
+const profileTooltip = document.createElement('div');
+profileTooltip.style.cssText = 'position:absolute;display:none;background:rgba(20,20,20,0.92);border:1px solid #ffaa00;border-radius:4px;padding:6px 10px;font:11px JetBrains Mono,monospace;color:#eee;pointer-events:none;z-index:100;box-shadow:0 4px 12px rgba(0,0,0,0.5);white-space:nowrap';
+document.getElementById('profile-container').style.position = 'relative';
+document.getElementById('profile-container').appendChild(profileTooltip);
+
+document.getElementById('profile-canvas').addEventListener('mousemove', e => {
+  const dots = state._profileDots;
+  if (!dots || !dots.length) { profileTooltip.style.display = 'none'; return; }
+  const rect = e.target.getBoundingClientRect();
+  const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+  let hit = null;
+  for (const dot of dots) {
+    if (Math.hypot(dot.x - mx, dot.y - my) < dot.r) { hit = dot; break; }
+  }
+  if (hit) {
+    const m = state.manholes[hit.idx];
+    const dists = computeDistances();
+    const inv = getInvert(m, hit.idx);
+    const pipe = state.pipes[hit.idx];
+    const pipeInfo = pipe ? `${pipe.pipe_size || '?'}" ${pipe.pipe_mat || ''}` : '';
+    profileTooltip.innerHTML = `<div><strong>${m.id || '?'}</strong></div><div>${fmtDist(dists[hit.idx])} ${distU()} cumulative</div><div>Invert: ${inv ? fmtElev(inv) : '\u2014'} ${elevU()}</div>${pipeInfo ? `<div style="color:#ffaa00">${pipeInfo}</div>` : ''}`;
+    profileTooltip.style.display = 'block';
+    profileTooltip.style.left = (hit.x + 12) + 'px';
+    profileTooltip.style.top = (hit.y - 50) + 'px';
+  } else {
+    profileTooltip.style.display = 'none';
+  }
+});
+document.getElementById('profile-canvas').addEventListener('mouseleave', () => {
+  profileTooltip.style.display = 'none';
+});
+
+
+
+// Click to select on profile
+document.getElementById('profile-canvas').addEventListener('click', e => {
+  const dots = state._profileDots;
+  if (!dots || !dots.length) return;
+  const rect = e.target.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  const mx = (e.clientX - rect.left);
+  const my = (e.clientY - rect.top);
+  let closest = null, closestDist = Infinity;
+  for (const dot of dots) {
+    const d = Math.hypot(dot.x - mx, dot.y - my);
+    if (d < dot.r && d < closestDist) { closest = dot; closestDist = d; }
+  }
+  if (closest) {
+    state.selected = state.selected === closest.idx ? null : closest.idx;
+    refresh();
+  }
+});
+
+// ── File I/O ───────────────────────────────────────────────────
+function saveJSON() {
+  const manholes = state.manholes.map(m => {
+    const entry = {
+      id: m.id, lat: m.lat, lon: m.lon,
+      lid_elevation_ft: m.lid_elevation_ft,
+      depth_ft: m.depth_ft,
+      invert_elevation_ft: m.invert_elevation_ft,
+    };
+    if (m._source && m._source !== 'manual') entry.source = m._source;
+    if (m.path_to_next && m.path_to_next !== 'straight') entry.path_to_next = m.path_to_next;
+    if (m.not_reached) entry.not_reached = true;
+    if (m.notes) entry.notes = m.notes;
+    return entry;
+  });
+  const pipes = state.pipes.filter(p => p).map(p => {
+    const entry = {};
+    if (p.pipe_id) entry.pipe_id = p.pipe_id;
+    if (p.coords) entry.coords = p.coords;
+    if (p.inv_start != null) entry.inv_start = p.inv_start;
+    if (p.inv_end != null) entry.inv_end = p.inv_end;
+    if (p.pipe_size) entry.pipe_size = p.pipe_size;
+    if (p.pipe_mat) entry.pipe_mat = p.pipe_mat;
+    if (p.length_ft) entry.length_ft = p.length_ft;
+    return entry;
+  });
+  const data = {
+    scan_date: document.getElementById('scan-date').value,
+    notes: document.getElementById('scan-notes').value,
+    manholes,
+  };
+  if (pipes.length) data.pipes = pipes;
+  const json = JSON.stringify(data, null, 2) + '\n';
+  const blob = new Blob([json], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'manholes.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast(`Saved ${manholes.length} manholes`, 'success');
+}
+
+function loadJSON() {
+  document.getElementById('file-input').click();
+}
+
+document.getElementById('file-input').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      const mhList = data.manholes || (Array.isArray(data) ? data : []);
+      state.manholes = mhList.map(m => ({
+        id: String(m.id || ''),
+        lat: m.lat || 0, lon: m.lon || 0,
+        lid_elevation_ft: m.lid_elevation_ft || 0,
+        depth_ft: m.depth_ft || 0,
+        invert_elevation_ft: m.invert_elevation_ft || 0,
+        path_to_next: m.path_to_next || 'straight',
+        not_reached: !!m.not_reached,
+        notes: m.notes || '',
+        _source: m.source || 'manual',
+      }));
+      state.pipes = (data.pipes || []).map(p => ({
+        pipe_id: p.pipe_id || null,
+        coords: p.coords || null,
+        inv_start: p.inv_start != null ? p.inv_start : null,
+        inv_end: p.inv_end != null ? p.inv_end : null,
+        pipe_size: p.pipe_size || null,
+        pipe_mat: p.pipe_mat || null,
+        length_ft: p.length_ft || null,
+      }));
+      state.selected = null;
+      if (data.scan_date) document.getElementById('scan-date').value = data.scan_date;
+      if (data.notes) document.getElementById('scan-notes').value = data.notes;
+      mapNeedsFit = true;
+      refresh();
+      toast(`Loaded ${state.manholes.length} manholes`, 'success');
+    } catch (err) {
+      toast('Invalid JSON file', 'error');
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+});
+
+// ── Toast ──────────────────────────────────────────────────────
+let toastTimer;
+function toast(msg, type = '') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast show ' + type;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.className = 'toast', 2500);
+}
+
+// ── Keyboard shortcuts ─────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  const active = document.activeElement;
+  if (active && (active.tagName === 'INPUT' || active.tagName === 'SELECT' || active.tagName === 'TEXTAREA')) return;
+  if (e.key === 'Delete' || e.key === 'Backspace') { deleteSelected(); e.preventDefault(); }
+  if (e.key === 'Escape') { state.selected = null; refresh(); }
+});
+
+// ── Init ───────────────────────────────────────────────────────
+refresh();
+toast('Load a manholes.json file or enter a structure ID to start');
+
+setTimeout(() => map.invalidateSize(), 200);
+</script>
+</body>
+</html>
